@@ -1,38 +1,50 @@
 #!/usr/bin/env python
 
 # Created by: Moksh Chitkara
-# Last Update: May 13th 2026
-# v0.1.0
+# Last Update: May 22nd 2026
+# v0.2.0
 # Copyright (C) 2026  Moksh Chitkara
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 import datetime
-import os
 
 # Global Variables
 projectManager = resolve.GetProjectManager()
+pathqueue = None
+toqueue = None
 
 def main_ui():
 
 	# vertical group
-	window = [ui.HGroup({"Spacing": 10}, [
-				ui.VGroup({"Spacing": 10}, [
-					ui.TextEdit({ "ID": "list","Text": "Projects to Archive will be listed here.", "Weight": 20}),
-					ui.HGroup({"Spacing": 10},[
-						ui.HGap(),
-						ui.Button({"ID": "archive","Text": "Archive", "Enabled": False, "Weight": 1}),
-						ui.Button({"ID": "clear","Text": "Clear", "Enabled": False, "Weight": 1}),
-						ui.HGap(),
-					]),
+	window = [ui.VGroup({"Spacing": 10}, [
+				# Hero Timeline
+				ui.HGroup({"Spacing": 1, "Weight": 0}, [
+					ui.Label({"ID": "name_label","Text": "Powergrade name: ", "Weight": 0}),
+					ui.LineEdit({"ID": "gradename", "Text": f"GradeGrab-{datetime.datetime.now():%m%d}-%02d-%02d-%02d" % (datetime.datetime.now().hour, datetime.datetime.now().minute, datetime.datetime.now().second), "Weight": 2}),
+					ui.HGap(),
+					ui.Label({"ID": "tl_label","Text": "Please select hero timeline: ", "Weight": 0}),
+					ui.ComboBox({"ID": "timelines", "Weight": 2})
 				]),
-				ui.VGroup({"Spacing": 10}, [
-					ui.Tree({"ID": "browser", 'SortingEnabled': True, 'AlternatingRowColors': True, 'SelectionMode': 'ExtendedSelection',
-							'Events': {'ItemDoubleClicked': True, 'ItemClicked': True}, "Weight": 20}),
-					ui.HGroup({"Spacing": 10},[
-						ui.HGap(),
-						ui.Button({"ID": "add","Text": "Add Selected", "Weight": 1}),
-						ui.HGap(),
+				
+				ui.HGroup({"Spacing": 10}, [
+					ui.VGroup({"Spacing": 10}, [
+						ui.TextEdit({ "ID": "list","Text": "Projects to search will be listed here.", "Weight": 20}),
+						ui.HGroup({"Spacing": 10},[
+							ui.HGap(),
+							ui.Button({"ID": "grab","Text": "Grab Grades", "Enabled": False, "Weight": 1}),
+							ui.Button({"ID": "clear","Text": "Clear", "Enabled": False, "Weight": 1}),
+							ui.HGap(),
+						]),
+					]),
+					ui.VGroup({"Spacing": 10}, [
+						ui.Tree({"ID": "browser", 'SortingEnabled': True, 'AlternatingRowColors': True, 'SelectionMode': 'ExtendedSelection',
+								'Events': {'ItemDoubleClicked': True, 'ItemClicked': True}, "Weight": 20}),
+						ui.HGroup({"Spacing": 10},[
+							ui.HGap(),
+							ui.Button({"ID": "add","Text": "Add Selected", "Weight": 1}),
+							ui.HGap(),
+						]),
 					]),
 				]),
 			])]
@@ -47,8 +59,8 @@ ui = fu.UIManager # get UI utility from fusion
 disp = bmd.UIDispatcher(ui) # gets display settings?
 
 # window definition
-window = disp.AddWindow({"WindowTitle": "Moksh's Grade Finder",
-			"ID": "GFWin", 
+window = disp.AddWindow({"WindowTitle": "Moksh's Grade Graber",
+			"ID": "GGWin", 
 			'WindowFlags': {'Window': True,'WindowStaysOnTopHint': True},
 			"Geometry": [1000,300,1150,800], # x-position, y-position, width, height
 			}, 
@@ -74,7 +86,7 @@ class PathList:
 		return len(self.list)
 		
 	def __str__(self):
-		itm["archive"].Enabled = True
+		itm["grab"].Enabled = True
 		itm["clear"].Enabled = True
 		self.sort()
 		returnable = str(self.list[0])
@@ -126,65 +138,57 @@ class PathList:
 class PathMem:
 	
 	# all this class needs is a timeline item
-	def __init__(self, dbInfo):
+	def __init__(self, initial):
 		log("PathMem initialized")
-		self.dbInfo = dbInfo
-		self.dbType = dbInfo['DbType']
-		self.dbName = dbInfo['DbName']
-		self.dbIp = dbInfo['IpAddress']
-		self.path = [self.dbName]
+		self.initial = initial
+		self.path = [initial]
+		self.tl = None
 		
 	def __str__(self):
 		if len(self.path) > 1:
-			return str(self.dbName) + ' > ' + ' > '.join(self.path[1:])
+			return ' > '.join(self.path)
 		else:
-			return str(self.dbName)
+			return str(self.path[0])
 			
 	def __iter__(self):
 		return self.path
 			
-	def append(self, newItm):
+	def append(self, newItm, tl = None):
 		if newItm == None:
 			log("PathMem cannot append None Type", 3)
+			
+		elif self.tl != None:
+			log("PathMem is complete to timeline", 3)
+			
 		else:
 			self.path.append(newItm)
+			self.tl = tl
+			return True
+			
+		return False
 
 	def pop(self, idx):
-		return self.path.pop(idx)
+		if self.tl:
+			self.tl = None
+			return self.path.pop(idx)
+		else:
+			return self.path.pop(idx)
 		
 	def resest(self):
-		del self.path[1:]
-		
+		self.tl = None
+		self.path = []
+
+
 	def multiply(self, kids):
 		pathlist = []
 		for kid in kids:
-			newpath = PathMem(self.dbInfo)
+			newpath = PathMem(self.initial)
+			print(self.path[1:])
 			newpath.path = newpath.path + self.path[1:]
-			newpath.append(kid)
+			newpath.append(kid, kids[kid])
 			pathlist.append(newpath)
 		return pathlist
-		
-	def dupe(self):
-		newpath = PathMem(self.dbInfo)
-		newpath.path = newpath.path + self.path[1:]
-		return newpath
-		
-	def dupeappend(self, kid):
-		newpath = self.dupe()
-		newpath.append(kid)
-		return newpath
-	
-	def locate(self):
-		projectManager.SetCurrentDatabase(self.dbInfo)
-		projectManager.GotoRootFolder()
-		for folder in self.path[1:-1]:
-			projectManager.OpenFolder(folder)
-	
-	def archive(self):
-		log("Starting archive " + str(self.path[-1]))
-		self.locate()
-		drapath = os.path.join(str(puitm["path"].Text), str(self.path[-1]))
-		projectManager.ArchiveProject(self.path[-1], drapath, puitm["src"].Checked, puitm["cache"].Checked, puitm["proxy"].Checked)
+
 
 def log(info, level = 1):
 
@@ -199,40 +203,33 @@ def log(info, level = 1):
 	
 	fullLog = [str(time), level, info]
 	print(" | ".join(fullLog))	
+	
+# creates sorted list of all timelines in project
+# input: project [item]
+# output: tl_lst [list]
+def tlLst(project):
+	
+	tl_lst = [] # placeholder will be filled
+	current_tl = project.GetCurrentTimeline().GetName()
+	# gets every tl name in project and appends to lst
+	for i in range(1, project.GetTimelineCount()+1):
+		name = project.GetTimelineByIndex(i).GetName()	
+		if current_tl != name:
+			tl_lst.append(name)
 
-def dataTree():
+	tl_lst = sorted(tl_lst)
+	tl_lst.insert(0, current_tl)
 
-	log("Building Database Tree")
-
-	global toqueue
-	toqueue = None
-	itm["add"].Enabled = False
-	itm["browser"].Clear()
-	
-	header = itm["browser"].NewItem()
-	header.Text[0] = "Databases"
-	itm["browser"].SetHeaderItem(header)
-	itm["browser"].ColumnCount = 1
-	itm["browser"].ColumnWidth[0] = 300
-	
-	global databaseLst
-	databaseLst = projectManager.GetDatabaseList()
-	for data in databaseLst:
-		newRow = itm["browser"].NewItem()
-		newRow.Text[0] = data['DbName']
-		itm["browser"].AddTopLevelItem(newRow)
-	
-	itm["browser"].SortByColumn(0, "AscendingOrder")
-	log("Database Tree Built")
-	
-	global state
-	state = "dataTree"
+	return tl_lst # return the list
 	
 def projTree():
 
 	log("Building Project Tree")
 
-	itm["add"].Enabled = True
+	global state
+	state = "project"
+
+	itm["add"].Enabled = False
 	itm["browser"].Clear()
 	
 	header = itm["browser"].NewItem()
@@ -257,45 +254,78 @@ def projTree():
 	
 	log("Project Tree Built")
 	
+def tlTree(project):
+
+	log("Building Timeline Tree")
+
 	global state
-	state = "projTree"
+	state = "timeline"
 
-def setDatabase(DbName):
+	itm["add"].Enabled = True
+	itm["browser"].Clear()
+	
+	header = itm["browser"].NewItem()
+	header.Text[0] = "Projects"
+	itm["browser"].SetHeaderItem(header)
+	itm["browser"].ColumnCount = 1
+	itm["browser"].ColumnWidth[0] = 300
+	
+	for tl in tlLst(project):
+		newRow = itm["browser"].NewItem()
+		newRow.Text[0] = tl
+		itm["browser"].AddTopLevelItem(newRow)
+	
+	itm["browser"].SortByColumn(0, "AscendingOrder")
+	
+	newRow = itm["browser"].NewItem()
+	newRow.Text[0] = " * GO TO PARENT FOLDER * "
+	itm["browser"].AddTopLevelItem(newRow)
+	
+	log("Timeline Tree Built")
 
-	log("Running set Database")
+# gets index of timeline
+# input: project [item], tl_name [str]
+# output: i [int]
+def tlidx(project, tlName):
 
-	for database in databaseLst:
-		if database['DbName'] == DbName:
-			return projectManager.SetCurrentDatabase(database)
-	log("No match database match found")
-	return False
+	for i in range(1,project.GetTimelineCount()+1):
+		name = project.GetTimelineByIndex(i).GetName()
+		if name == tlName:
+			return int(i)
+
+def createPowergrade():
+	if itm["gradename"].Text == "":
+		albumName = f"GradeGrab-{datetime.datetime.now():%m%d}-%02d-%02d-%02d" % (datetime.datetime.now().hour, datetime.datetime.now().minute, datetime.datetime.now().second)
+	else:
+		albumName = itm["gradename"].Text
+	
+	project = projectManager.GetCurrentProject()
+	gallery = project.GetGallery()
+	galleryStillAlbum = gallery.CreateGalleryPowerGradeAlbum()
+	if gallery.SetAlbumName(galleryStillAlbum, albumName):
+		log("Powergrade album created")
+		return galleryStillAlbum
+	else:
+		log("Powergrade album creation failed", 3)
+		return False
+	
 
 def _add(ev):
 
-	log("Adding selected items to Queue")
+	log("Adding selected timelines to Queue")
 
 	selected = itm["browser"].SelectedItems()
 	
 	if len(selected) < 1:
 		return
-	
-	pathlist = []
-	allprojects = projectManager.GetProjectListInCurrentFolder()
-	allfolders = projectManager.GetFolderListInCurrentFolder()
+	project = projectManager.GetCurrentProject()
+	tlDict = {}
 	
 	for key in selected:
 		item = selected[key].Text[0]
-		if item in allfolders:	
-			while not projectManager.OpenFolder(item):
-				pass
-			toqueue.append(item)
-			pathlist = pathlist + toqueue.multiply(projectManager.GetProjectListInCurrentFolder())
-			toqueue.pop(-1)
-			while not projectManager.GotoParentFolder():
-				pass
-		
-		elif item in allprojects:
-			pathlist.append(toqueue.dupeappend(item))
+		tlDict[item] = project.GetTimelineByIndex(tlidx(project, item))
+	
+	pathlist = toqueue.multiply(tlDict)
 	
 	global pathqueue
 	if pathqueue == None:
@@ -314,8 +344,8 @@ def _clear(ev):
 	global pathqueue
 	pathqueue = None
 
-	itm["list"].Text = "Projects to Archive will be listed here."
-	itm["archive"].Enabled = False
+	itm["list"].Text = "Projects to search will be listed here."
+	itm["grab"].Enabled = False
 	itm["clear"].Enabled = False
 
 def _tree(ev):
@@ -327,59 +357,46 @@ def _tree(ev):
 		folder = selected[key].Text[0]
 
 	if selected == {}:
-		if state == "dataTree":
-			dataTree()
-		else:
-			toqueue.reset()
-			projectManager.GotoRootFolder() # Goes to root in project manager 
-			projTree()
+		toqueue.reset()
+		projectManager.GotoRootFolder() # Goes to root in project manager 
+		projTree()
 
 	elif str(folder) == " * GO TO PARENT FOLDER * ":
-		if projectManager.GotoParentFolder():
-			toqueue.pop(-1)
-			projTree()
-		else:
-			dataTree()
+		if state == "project":
+			projectManager.GotoParentFolder()
+		toqueue.pop(-1)
+		projTree()
 	
 	elif projectManager.OpenFolder(str(folder)):	# opens folder if it is selected
+		if toqueue == None:
+			toqueue = PathMem(str(folder))
+		else:
+			toqueue.append(str(folder))
+		projTree()
+		
+	elif projectManager.LoadProject(str(folder)):
 		toqueue.append(str(folder))
-		projTree()
-
-	elif setDatabase(str(folder)):
-		toqueue = PathMem(projectManager.GetCurrentDatabase())
-		if state == "dataTree":
-			projectManager.GotoRootFolder()
-		projTree()
-			
-def _filebrowser(ev):
-	location = fu.RequestDir()
-	puitm["path"].Text = str(location)
-
-def _archwin(ev):
-	_filebrowser("none")
+		project = projectManager.GetCurrentProject()
+		tlTree(project)
 	
-	if os.path.exists(puitm["path"].Text):		
-		window.Hide()
-		disp.ExitLoop()
-		puwindow.Show()
-		disp.RunLoop()
-		puwindow.Hide()
+	else:
+		log("Unknown input", 3)
+		
 
 def _main(ev):
-	puitm["ok"].Enabled = False
-	puitm["browse"].Enabled = False
+	itm["add"].Enabled = False
+	itm["grab"].Enabled = False
+	itm["clear"].Enabled = False
 
-	total = len(pathqueue)
-	i = 0
-	for project in pathqueue:
-		i += 1
-		puitm["progress"].Text = "Working on " + str(i) + " of " + str(total) + " archives." + "\n" + str(project)
-		project.archive()
 
-	puitm["progress"].Text = "Done!" + "\n\n" + str(pathqueue)
+	createPowergrade()	# create powergrade albume
+	# create mem
+	
+	
 
-	puitm["ok"].Enabled = True
-	puitm["browse"].Enabled = True
+	itm["add"].Enabled = True
+	itm["grab"].Enabled = True
+	itm["clear"].Enabled = True
 
 # needed to close window
 def _close(ev):
@@ -388,11 +405,13 @@ def _close(ev):
 ################################################################################################
 # GUI Elements #
 # manipulations
-dataTree()
+itm["timelines"].AddItems(tlLst(projectManager.GetCurrentProject()))
+projectManager.GotoRootFolder()
+projTree()
 # button presses
-window.On.GFWin.Close = _close
+window.On.GGWin.Close = _close
 window.On.browser.ItemDoubleClicked = _tree
-window.On.archive.Clicked = _archwin
+window.On.grab.Clicked = _main
 window.On.clear.Clicked = _clear
 window.On.add.Clicked = _add
 # window loops
